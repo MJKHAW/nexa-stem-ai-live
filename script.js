@@ -36,6 +36,8 @@
   };
 
   var pourToken = 0;
+  var imageReady = {};
+  var perfBaseLogged = false;
   var cylinder = document.getElementById("cylinder");
   var water = document.getElementById("water");
   var scale = document.getElementById("scale");
@@ -696,8 +698,9 @@
         state.proofPours = state.attemptPours.slice();
       }
       showM1Outcome("betul", function () {
-        syncM1FikirScreen();
+        var pending = syncM1FikirScreen();
         enterScreen("m1-buktikan");
+        return pending;
       });
     } else {
       showMessage("Tangki kini " + state.volume + " mL. Sasaran masih 250 mL.");
@@ -1678,7 +1681,7 @@
       if (token !== m2AdvanceToken || missionTwoScreen.hidden) {
         return;
       }
-      action();
+      return action();
     };
   }
 
@@ -1734,13 +1737,13 @@
     document.getElementById("m2-proof-editor").hidden = true;
     document.getElementById("m2-reward").hidden = true;
     missionTwoScreen.classList.remove("is-m2-editor-stacked");
-    art.src = "assets/screens/m2/m2_fikir.png";
-    art.alt = "Misi 2 Fikir. Paras air naik daripada 120 mL kepada 165 mL. Berapakah isipadu batu kristal?";
+    var pending = assignArt(art, "assets/screens/m2/m2_fikir.png", "Misi 2 Fikir. Paras air naik daripada 120 mL kepada 165 mL. Berapakah isipadu batu kristal?");
     m2ExpFrame.classList.remove("is-m2-exp");
     m2ExpFrame.classList.remove("is-m2-exp-editing");
     m2ExpFrame.classList.remove("is-m2-proof");
     m2ExpFrame.classList.remove("is-m2-proof-editing");
     enterScreen("m2-fikir");
+    return pending;
   }
 
   function placeM2Crystal(mode) {
@@ -1846,11 +1849,9 @@
   function openM2Experiment(volume) {
     var art = document.getElementById("m2-art");
     if (!m2.fikirSolved) {
-      showM2FikirScreen();
-      return;
+      return showM2FikirScreen();
     }
-    art.src = "assets/screens/m2/m2_eksperimen.png";
-    art.alt = "Misi 2 Eksperimen. Paras awal air ialah 120 mL. Pilih satu batu kristal supaya paras air menjadi 165 mL.";
+    var pending = assignArt(art, "assets/screens/m2/m2_eksperimen.png", "Misi 2 Eksperimen. Paras awal air ialah 120 mL. Pilih satu batu kristal supaya paras air menjadi 165 mL.");
     m2ExpFrame.classList.add("is-m2-exp");
     m2ExpFrame.classList.remove("is-m2-proof");
     m2ExpFrame.classList.remove("is-m2-proof-editing");
@@ -1864,21 +1865,25 @@
     placeM2ExpWater(volume, false);
     placeM2Crystal(volume === 165 ? "final" : "hide");
     enterScreen("m2-eksperimen");
+    return pending;
   }
 
   function showM2Complete() {
     document.getElementById("m2-exp-layer").hidden = true;
     document.getElementById("m2-proof-layer").hidden = true;
     document.getElementById("m2-proof-editor").hidden = true;
-    document.getElementById("m2-feedback").hidden = true;
     document.getElementById("m2-dialog").hidden = true;
     m2ExpFrame.classList.remove("is-m2-exp");
     m2ExpFrame.classList.remove("is-m2-exp-editing");
     m2ExpFrame.classList.remove("is-m2-proof");
     m2ExpFrame.classList.remove("is-m2-proof-editing");
-    document.getElementById("m2-reward").hidden = false;
+    if (!m1OutcomeOpen) {
+      document.getElementById("m2-feedback").hidden = true;
+    }
+    var pending = revealReward("m2-reward");
     renderMap();
     enterScreen("m2-selesai");
+    return pending;
   }
 
   function openM2Buktikan() {
@@ -1888,11 +1893,9 @@
       return;
     }
     if (m2.buktiSolved) {
-      showM2Complete();
-      return;
+      return showM2Complete();
     }
-    art.src = "assets/screens/m2/m2_buktikan.png";
-    art.alt = "Misi 2 Buktikan. Pilih pengiraan yang membuktikan paras akhir ialah 165 mililiter.";
+    var pending = assignArt(art, "assets/screens/m2/m2_buktikan.png", "Misi 2 Buktikan. Pilih pengiraan yang membuktikan paras akhir ialah 165 mililiter.");
     m2ExpFrame.classList.remove("is-m2-exp");
     m2ExpFrame.classList.remove("is-m2-exp-editing");
     m2ExpFrame.classList.add("is-m2-proof");
@@ -1901,6 +1904,7 @@
     document.getElementById("m2-reward").hidden = true;
     document.getElementById("m2-proof-layer").hidden = false;
     enterScreen("m2-buktikan");
+    return pending;
   }
 
   openM2Stage = function () {
@@ -1933,7 +1937,7 @@
         renderM2();
         showM2Outcome("betul", queueM2Advance(function () {
           m2ExpBusy = false;
-          openM2Buktikan();
+          return openM2Buktikan();
         }));
         return;
       }
@@ -2675,7 +2679,7 @@
           guideMemory.lastM2ProofWrong = "";
           recordM2(true, "Buktikan: betul, 120 + 45 = 165");
           renderM2();
-          showM2Outcome("betul", queueM2Advance(function () { showM2Complete(); }));
+          showM2Outcome("betul", queueM2Advance(function () { return showM2Complete(); }));
           return;
         }
         if (equation !== "120+20=140" && equation !== "120+60=180") { return; }
@@ -2738,7 +2742,7 @@
         recordM2(true, "Fikir: betul, 45 mL");
         renderM2();
         showM2Outcome("betul", queueM2Advance(function () {
-          openM2Experiment(120);
+          return openM2Experiment(120);
         }));
         return;
       }
@@ -3272,14 +3276,366 @@
     speakNow("Air terlalu banyak. Jom cuba sekali lagi!", true);
   }
 
+  // Temporary transition logs. In the browser console, filter for nexa-perf.
+  var STAGE_PRELOAD = {
+    welcome: ["assets/peta_kota_air.png"],
+    demo: ["assets/screens/feedback/betul.png", "assets/screens/feedback/cuba_lagi.png", "assets/peta_kota_air.png"],
+    map: ["assets/screens/m1/m1_eksperimen.png", "assets/screens/feedback/betul.png", "assets/screens/feedback/cuba_lagi.png"],
+    "m1-fikir": ["assets/screens/feedback/betul.png", "assets/screens/m1/m1_eksperimen.png", "assets/screens/feedback/cuba_lagi.png"],
+    "m1-eksperimen": ["assets/screens/feedback/betul.png", "assets/screens/m1/m1_buktikan.png", "assets/screens/feedback/cuba_lagi.png"],
+    "m1-buktikan": ["assets/screens/feedback/betul.png", "assets/screens/rewards/misi_selesai.png", "assets/badges/m1_badge.png"],
+    "m1-selesai": ["assets/screens/m2/m2_eksperimen.png"],
+    "m2-fikir": ["assets/screens/feedback/betul.png", "assets/screens/m2/m2_eksperimen.png", "assets/screens/feedback/cuba_lagi.png"],
+    "m2-eksperimen": ["assets/screens/feedback/betul.png", "assets/screens/m2/m2_buktikan.png", "assets/screens/feedback/cuba_lagi.png"],
+    "m2-buktikan": ["assets/screens/feedback/betul.png", "assets/screens/rewards/misi_selesai.png", "assets/badges/m2_badge.png"],
+    "m2-selesai": ["assets/screens/m3/m3_eksperimen.png"],
+    "m3-fikir": ["assets/screens/feedback/betul.png", "assets/screens/m3/m3_eksperimen.png", "assets/screens/feedback/cuba_lagi.png"],
+    "m3-eksperimen": ["assets/screens/feedback/betul.png", "assets/screens/m3/m3_buktikan.png", "assets/screens/feedback/cuba_lagi.png"],
+    "m3-buktikan": ["assets/screens/feedback/betul.png", "assets/screens/rewards/misi_selesai.png", "assets/badges/m3_badge.png"],
+    "m3-selesai": ["assets/screens/m4/m4_eksperimen.png"],
+    "m4-fikir": ["assets/screens/feedback/betul.png", "assets/screens/m4/m4_eksperimen.png", "assets/screens/feedback/cuba_lagi.png"],
+    "m4-eksperimen": ["assets/screens/feedback/betul.png", "assets/screens/m4/m4_buktikan.png", "assets/screens/feedback/cuba_lagi.png"],
+    "m4-buktikan": ["assets/screens/feedback/betul.png", "assets/screens/rewards/misi_selesai.png", "assets/screens/rewards/koleksi_lencana.png", "assets/badges/m4_badge.png"],
+    "m4-selesai": ["assets/screens/rewards/koleksi_lencana.png"],
+    koleksi: []
+  };
+
+  function perfLog(eventName, detail) {
+    console.info("[nexa-perf]", Math.round(performance.now()) + "ms", eventName, detail || "");
+  }
+
+  function pageBase() {
+    var url = new URL(window.location.href);
+    var path = url.pathname;
+    if (path.charAt(path.length - 1) !== "/" && !/\.[a-z0-9]+$/i.test(path)) {
+      path += "/";
+    }
+    return url.origin + path;
+  }
+
+  function assetUrl(path) {
+    return new URL(path, pageBase()).href;
+  }
+
+  function warmImage(path) {
+    var url = assetUrl(path);
+    var started;
+    var existing;
+    var nodes;
+    var index;
+    if (imageReady[url]) {
+      return imageReady[url];
+    }
+    started = performance.now();
+    perfLog("preload-start", path);
+    nodes = document.querySelectorAll("img[src]");
+    existing = null;
+    for (index = 0; index < nodes.length; index += 1) {
+      if (nodes[index].getAttribute("src") === path) {
+        existing = nodes[index];
+        break;
+      }
+    }
+    imageReady[url] = new Promise(function (resolve) {
+      var img = existing || new Image();
+      var settled = false;
+      function finishWarm(ok) {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        perfLog(ok ? "preload-ready" : "preload-fail", path + " " + Math.round(performance.now() - started) + "ms");
+        resolve(!!ok);
+      }
+      function decodeLoaded() {
+        if (img.decode) {
+          img.decode().then(function () {
+            finishWarm(true);
+          }, function () {
+            finishWarm(true);
+          });
+          return;
+        }
+        finishWarm(true);
+      }
+      if (existing && existing.complete) {
+        if (existing.naturalWidth) {
+          decodeLoaded();
+        } else {
+          finishWarm(false);
+        }
+        return;
+      }
+      img.addEventListener("load", decodeLoaded);
+      img.addEventListener("error", function () {
+        finishWarm(false);
+      });
+      if (!existing) {
+        img.src = url;
+      }
+    });
+    return imageReady[url];
+  }
+
+  function warmUpcoming(screenId) {
+    var list = STAGE_PRELOAD[screenId];
+    var index = 0;
+    if (!perfBaseLogged) {
+      perfBaseLogged = true;
+      perfLog("asset-base", pageBase());
+    }
+    if (!list || !list.length) {
+      return;
+    }
+    perfLog("preload-plan", screenId + " -> " + list[0]);
+    function step() {
+      if (index >= list.length) {
+        return;
+      }
+      var path = list[index];
+      index += 1;
+      warmImage(path).then(step, step);
+    }
+    step();
+  }
+
+  function afterPaint() {
+    return new Promise(function (resolve) {
+      window.requestAnimationFrame(function () {
+        window.requestAnimationFrame(function () {
+          resolve(true);
+        });
+      });
+    });
+  }
+
+  function decodeNode(img) {
+    function fromWidth() {
+      return !!(img && img.complete && img.naturalWidth);
+    }
+    function waitLoad() {
+      return new Promise(function (resolve) {
+        function done() {
+          img.removeEventListener("load", done);
+          img.removeEventListener("error", done);
+          resolve(!!img.naturalWidth);
+        }
+        img.addEventListener("load", done);
+        img.addEventListener("error", done);
+      });
+    }
+    if (!img) {
+      return Promise.resolve(false);
+    }
+    if (img.decode) {
+      return img.decode().then(function () {
+        return !!img.naturalWidth;
+      }, function () {
+        if (fromWidth()) {
+          return true;
+        }
+        if (img.complete) {
+          return false;
+        }
+        return waitLoad();
+      });
+    }
+    if (img.complete) {
+      return Promise.resolve(!!img.naturalWidth);
+    }
+    return waitLoad();
+  }
+
+  function stageFronts(art) {
+    var list = [];
+    var node = art.nextElementSibling;
+    while (node && node.classList && node.classList.contains("stage-front")) {
+      list.push(node);
+      node = node.nextElementSibling;
+    }
+    return list;
+  }
+
+  function placeFrontOnTop(art, front) {
+    var fronts = stageFronts(art);
+    var last = fronts.length ? fronts[fronts.length - 1] : art;
+    if (last !== front) {
+      art.parentNode.insertBefore(front, last.nextSibling);
+    }
+  }
+
+  function makeStageFront(art) {
+    var front = document.createElement("img");
+    front.className = "mission-art stage-front";
+    front.alt = "";
+    front.setAttribute("aria-hidden", "true");
+    front.style.zIndex = "1";
+    front.style.visibility = "hidden";
+    placeFrontOnTop(art, front);
+    return front;
+  }
+
+  function assignDirect(img, url, path, alt, started) {
+    if (alt && img.alt !== undefined) {
+      img.alt = alt;
+    }
+    if ((img.currentSrc || img.src) !== url) {
+      perfLog("art-swap", path);
+      img.src = url;
+    }
+    img.style.visibility = "visible";
+    return decodeNode(img).then(function (ready) {
+      perfLog(ready ? "art-ready" : "art-failed", path + " " + Math.round(performance.now() - started) + "ms");
+      return ready;
+    });
+  }
+
+  function assignArt(art, path, alt) {
+    var url = assetUrl(path);
+    var started = performance.now();
+    var missionArt = art && (art.id === "m1-art" || art.id === "m2-art" || art.id === "m3-art" || art.id === "m4-art");
+    if (!art) {
+      return Promise.resolve(false);
+    }
+    return warmImage(path).then(function (ok) {
+      var fronts;
+      var top;
+      var spare;
+      var index;
+      if (!ok) {
+        perfLog("art-failed", path);
+        return false;
+      }
+      if (!missionArt) {
+        return assignDirect(art, url, path, alt, started);
+      }
+      fronts = stageFronts(art);
+      top = fronts.length ? fronts[fronts.length - 1] : null;
+      if (!m1OutcomeOpen && !top) {
+        return assignDirect(art, url, path, alt, started);
+      }
+      if (top && top.style.visibility !== "hidden" && (top.currentSrc || top.src) === url && top.naturalWidth) {
+        if ((art.currentSrc || art.src) !== url) {
+          art.src = url;
+        }
+        if (alt) {
+          art.alt = alt;
+        }
+        perfLog("art-ready", path + " cached");
+        return true;
+      }
+      spare = null;
+      for (index = 0; index < fronts.length; index += 1) {
+        if (fronts[index] !== top && fronts[index].style.visibility === "hidden") {
+          spare = fronts[index];
+        }
+      }
+      if (!spare) {
+        if (fronts.length < 2) {
+          spare = makeStageFront(art);
+        } else {
+          spare = fronts[0] === top ? fronts[1] : fronts[0];
+          spare.style.visibility = "hidden";
+        }
+      }
+      spare.style.visibility = "hidden";
+      placeFrontOnTop(art, spare);
+      if ((spare.currentSrc || spare.src) !== url) {
+        perfLog("art-swap", path);
+        spare.src = url;
+      }
+      return decodeNode(spare).then(function (ready) {
+        if (!ready) {
+          spare.style.visibility = "hidden";
+          perfLog("art-failed", path);
+          return false;
+        }
+        spare.style.visibility = "visible";
+        if ((art.currentSrc || art.src) !== url) {
+          art.src = url;
+        }
+        if (alt) {
+          art.alt = alt;
+        }
+        perfLog("art-ready", path + " " + Math.round(performance.now() - started) + "ms");
+        return m1OutcomeOpen ? afterPaint() : true;
+      });
+    });
+  }
+
+  function revealReward(rewardId) {
+    var reward = document.getElementById(rewardId);
+    var art;
+    var badges;
+    var waits;
+    var index;
+    function warmBadge(img) {
+      var path = img.getAttribute("src");
+      if (!path) {
+        return Promise.resolve(true);
+      }
+      return warmImage(path).then(function (ok) {
+        return ok ? decodeNode(img) : false;
+      });
+    }
+    if (!reward) {
+      return Promise.resolve(false);
+    }
+    art = reward.querySelector(".m1-reward-art");
+    badges = reward.querySelectorAll(".m1-reward-badge img");
+    waits = [assignArt(art, "assets/screens/rewards/misi_selesai.png", art ? (art.getAttribute("alt") || "") : "")];
+    for (index = 0; index < badges.length; index += 1) {
+      if (!badges[index].hidden) {
+        waits.push(warmBadge(badges[index]));
+      }
+    }
+    return Promise.all(waits).then(function (results) {
+      for (index = 0; index < results.length; index += 1) {
+        if (!results[index]) {
+          return false;
+        }
+      }
+      reward.hidden = false;
+      perfLog("reward-shown", rewardId);
+      return afterPaint();
+    });
+  }
+
+  function bindFeedbackHotspot(layer) {
+    var button = layer.querySelector(".feedback-hotspot");
+    if (button) {
+      return button;
+    }
+    button = document.createElement("button");
+    button.type = "button";
+    button.className = "m1-hotspot feedback-hotspot";
+    button.setAttribute("aria-label", "Teruskan");
+    button.style.setProperty("--x", "12%");
+    button.style.setProperty("--y", "81.5%");
+    button.style.setProperty("--w", "76%");
+    button.style.setProperty("--h", "11.5%");
+    button.hidden = true;
+    layer.appendChild(button);
+    button.addEventListener("click", function () {
+      perfLog("feedback-click", "TERUSKAN");
+      if (layer._nexaAdvance) {
+        layer._nexaAdvance(true);
+      }
+    });
+    return button;
+  }
+
   function showPortraitFeedback(layerId, artId, line, onDone) {
     var layer = document.getElementById(layerId);
     var art = document.getElementById(artId);
     var token;
-    var started;
+    var started = 0;
     var finished = false;
     var timer = 0;
+    var isBetul = line.indexOf("Belum tepat") !== 0;
+    var src = isBetul ? "assets/screens/feedback/betul.png" : "assets/screens/feedback/cuba_lagi.png";
     var maxWait = narrationMuted || !window.speechSynthesis ? 1800 : Math.min(11000, 2200 + line.length * 75);
+    var button;
     if (m1OutcomeOpen) {
       return;
     }
@@ -3292,41 +3648,170 @@
     m1OutcomeOpen = true;
     m1OutcomeToken += 1;
     token = m1OutcomeToken;
-    started = Date.now();
     document.getElementById("m1-dialog").hidden = true;
     document.getElementById("demo-dialog").hidden = true;
-    art.src = line.indexOf("Belum tepat") === 0 ? "assets/screens/feedback/cuba_lagi.png" : "assets/screens/feedback/betul.png";
-    art.alt = line.indexOf("Belum tepat") === 0 ? "Cuba lagi. Jawapan belum tepat." : "Betul. Jawapan anda tepat.";
-    layer.hidden = false;
-    function finish() {
-      var wait;
+    button = bindFeedbackHotspot(layer);
+    button.hidden = true;
+    var shown = false;
+    var imageWait = 0;
+    var coverTimer = 0;
+    var advanceAttempt = 0;
+    perfLog("feedback-request", src);
+    function stopImageWatch() {
+      window.clearTimeout(imageWait);
+      imageWait = 0;
+      art.removeEventListener("error", onArtError);
+    }
+    function onArtError() {
       if (finished || token !== m1OutcomeToken) {
         return;
       }
-      wait = 1400 - (Date.now() - started);
-      if (wait > 0) {
-        window.clearTimeout(timer);
-        timer = window.setTimeout(finish, wait);
+      perfLog("feedback-image-error", src);
+      recoverFromMissingFeedback();
+    }
+    function recoverFromMissingFeedback() {
+      if (shown || finished || token !== m1OutcomeToken) {
         return;
       }
+      stopImageWatch();
+      layer.hidden = false;
+      button.hidden = true;
+      perfLog("feedback-image-fallback", src);
+      finish(true);
+    }
+    function finish(force) {
+      var wait;
+      var pending;
+      var advanceAt;
+      var myAttempt;
+      var committed = false;
+      if (finished || token !== m1OutcomeToken) {
+        return;
+      }
+      if (!force) {
+        wait = 1400 - (Date.now() - started);
+        if (!started || wait > 0) {
+          window.clearTimeout(timer);
+          timer = window.setTimeout(function () {
+            finish(false);
+          }, started ? wait : 200);
+          return;
+        }
+      }
+      stopImageWatch();
       finished = true;
-      m1OutcomeOpen = false;
       window.clearTimeout(timer);
-      layer.hidden = true;
-      if (onDone) {
-        onDone();
-      }
-    }
-    timer = window.setTimeout(finish, maxWait);
-    if (narrationMuted || !window.speechSynthesis) {
+      window.clearTimeout(coverTimer);
+      button.hidden = true;
+      advanceAttempt += 1;
+      myAttempt = advanceAttempt;
+      advanceAt = performance.now();
+      perfLog("feedback-advance", (force ? "TERUSKAN" : "auto") + " " + src);
       stopNarration();
-      return;
-    }
-    speakNow(line, true, function () {
-      if (token !== m1OutcomeToken) {
+      if (onDone) {
+        pending = onDone();
+      }
+      function reveal() {
+        if (committed || myAttempt !== advanceAttempt || token !== m1OutcomeToken) {
+          return;
+        }
+        committed = true;
+        window.clearTimeout(coverTimer);
+        window.requestAnimationFrame(function () {
+          if (token !== m1OutcomeToken) {
+            return;
+          }
+          layer.hidden = true;
+          m1OutcomeOpen = false;
+          layer._nexaAdvance = null;
+          perfLog("feedback-hidden", Math.round(performance.now() - advanceAt) + "ms cover");
+        });
+      }
+      function holdForRetry() {
+        if (committed || myAttempt !== advanceAttempt || token !== m1OutcomeToken) {
+          return;
+        }
+        window.clearTimeout(coverTimer);
+        finished = false;
+        layer.hidden = false;
+        button.hidden = !isBetul;
+        layer._nexaAdvance = finish;
+        perfLog("feedback-retry", src);
+      }
+      if (pending && typeof pending.then === "function") {
+        coverTimer = window.setTimeout(function () {
+          perfLog("feedback-cover-timeout", src);
+          holdForRetry();
+        }, 8000);
+        pending.then(function (ok) {
+          window.clearTimeout(coverTimer);
+          if (ok === false) {
+            holdForRetry();
+            return;
+          }
+          reveal();
+        }, function () {
+          window.clearTimeout(coverTimer);
+          holdForRetry();
+        });
         return;
       }
-      finish();
+      reveal();
+    }
+    layer._nexaAdvance = finish;
+    art.addEventListener("error", onArtError);
+    imageWait = window.setTimeout(function () {
+      perfLog("feedback-image-timeout", src);
+      recoverFromMissingFeedback();
+    }, 8000);
+    function armSpeech() {
+      timer = window.setTimeout(function () {
+        finish(false);
+      }, maxWait);
+      if (narrationMuted || !window.speechSynthesis) {
+        stopNarration();
+        return;
+      }
+      speakNow(line, true, function () {
+        if (token !== m1OutcomeToken) {
+          return;
+        }
+        finish(false);
+      });
+    }
+    warmImage(src).then(function (ok) {
+      if (token !== m1OutcomeToken || finished) {
+        return;
+      }
+      if (!ok) {
+        perfLog("feedback-image-error", src);
+        recoverFromMissingFeedback();
+        return;
+      }
+      art.alt = isBetul ? "Betul. Jawapan anda tepat." : "Cuba lagi. Jawapan belum tepat.";
+      if ((art.currentSrc || art.src) !== assetUrl(src)) {
+        art.src = assetUrl(src);
+      }
+      if (finished) {
+        return;
+      }
+      function show() {
+        if (token !== m1OutcomeToken || finished) {
+          return;
+        }
+        shown = true;
+        stopImageWatch();
+        started = Date.now();
+        button.hidden = !isBetul;
+        layer.hidden = false;
+        perfLog("feedback-shown", src);
+        armSpeech();
+      }
+      if (art.decode) {
+        art.decode().then(show, show);
+        return;
+      }
+      show();
     });
   }
 
@@ -3374,13 +3859,13 @@
   }
 
   function showM1CompleteScreen() {
-    var reward = document.getElementById("m1-reward");
+    var feedback = document.getElementById("m1-feedback");
     document.getElementById("m1-dialog").hidden = true;
-    document.getElementById("m1-feedback").hidden = true;
     showRewardBadge(1);
-    if (reward) {
-      reward.hidden = false;
+    if (feedback && !m1OutcomeOpen) {
+      feedback.hidden = true;
     }
+    return revealReward("m1-reward");
   }
 
   function syncM1FikirScreen() {
@@ -3405,22 +3890,21 @@
     document.querySelectorAll(".m1-bukti-only").forEach(function (button) {
       button.hidden = stage !== "bukti";
     });
+    var pending = Promise.resolve(true);
     if (art) {
       if (stage === "bukti") {
-        art.src = "assets/screens/m1/m1_buktikan.png";
-        art.alt = "Misi 1 Buktikan. Pilih pengiraan yang membuktikan paras akhir 250 mL.";
+        pending = assignArt(art, "assets/screens/m1/m1_buktikan.png", "Misi 1 Buktikan. Pilih pengiraan yang membuktikan paras akhir 250 mL.");
       } else if (stage === "eksperimen") {
-        art.src = "assets/screens/m1/m1_eksperimen.png";
-        art.alt = "Misi 1 Eksperimen. Paras awal 120 mL. Isi sehingga 250 mL.";
+        pending = assignArt(art, "assets/screens/m1/m1_eksperimen.png", "Misi 1 Eksperimen. Paras awal 120 mL. Isi sehingga 250 mL.");
       } else {
-        art.src = "assets/screens/m1/m1_fikir.png";
-        art.alt = "Misi 1 Fikir. Tangki ada 120 mL. Sasaran 250 mL.";
+        pending = assignArt(art, "assets/screens/m1/m1_fikir.png", "Misi 1 Fikir. Tangki ada 120 mL. Sasaran 250 mL.");
       }
     }
     if (tank) {
       tank.hidden = stage !== "eksperimen";
     }
     placeM1Water();
+    return pending;
   }
 
   function setupMissionOnePicture() {
@@ -3441,8 +3925,9 @@
         fikirForm.dispatchEvent(submitEvent);
         if (state.fikirSolved) {
           showM1Outcome("betul", function () {
-            syncM1FikirScreen();
+            var pending = syncM1FikirScreen();
             enterScreen("m1-eksperimen");
+            return pending;
           });
           return;
         }
@@ -3515,8 +4000,9 @@
         if (state.buktiSolved) {
           if (button.getAttribute("data-m1-proof") === "120+130=250") {
             showM1Outcome("betul", function () {
-              showM1CompleteScreen();
+              var pending = showM1CompleteScreen();
               enterScreen("m1-selesai");
+              return pending;
             });
           }
           return;
@@ -3534,8 +4020,9 @@
         recordAttempt(true, "Buktikan: betul, 120 + 130 = 250 mL");
         render();
         showM1Outcome("betul", function () {
-          showM1CompleteScreen();
+          var pending = showM1CompleteScreen();
           enterScreen("m1-selesai");
+          return pending;
         });
       });
     });
@@ -3863,7 +4350,9 @@
         novaLast.demo = button.getAttribute("data-demo-answer");
         if (Number(button.getAttribute("data-demo-answer")) === 130) {
           showDemoOutcome("betul", function () {
-            showMap();
+            return warmImage("assets/peta_kota_air.png").then(function () {
+              showMap();
+            });
           });
           return;
         }
@@ -4039,6 +4528,7 @@
       guideMemory.lastM4ProofWrong = "";
     }
     narrationScreenId = screenId;
+    warmUpcoming(screenId);
     if (narrationMuted || !SCREEN_LINES[screenId]) {
       stopNarration();
       return;
@@ -5270,7 +5760,7 @@
         if (token !== box.wait.m3 || missionThreeScreen.hidden) {
           return;
         }
-        action();
+        return action();
       };
     }
     function showFikir() {
@@ -5279,9 +5769,9 @@
       document.getElementById("m3-exp-layer").hidden = true;
       document.getElementById("m3-proof-layer").hidden = true;
       document.getElementById("m3-reward").hidden = true;
-      art.src = "assets/screens/m3/m3_fikir.png";
-      art.alt = "Misi 3 Fikir. Tangki ada 700 mL dan bocor 100 mL. Berapakah baki air?";
+      var pending = assignArt(art, "assets/screens/m3/m3_fikir.png", "Misi 3 Fikir. Tangki ada 700 mL dan bocor 100 mL. Berapakah baki air?");
       enterScreen("m3-fikir");
+      return pending;
     }
     function showExperiment() {
       frame.classList.add("is-m3-exp");
@@ -5289,10 +5779,10 @@
       document.getElementById("m3-exp-layer").hidden = false;
       document.getElementById("m3-proof-layer").hidden = true;
       document.getElementById("m3-reward").hidden = true;
-      art.src = "assets/screens/m3/m3_eksperimen.png";
-      art.alt = "Misi 3 Eksperimen. Paras awal 600 mL. Isi sehingga 1000 mL.";
+      var pending = assignArt(art, "assets/screens/m3/m3_eksperimen.png", "Misi 3 Eksperimen. Paras awal 600 mL. Isi sehingga 1000 mL.");
       box.placeFill("m3", volume, false);
       enterScreen("m3-eksperimen");
+      return pending;
     }
     function showProof() {
       frame.classList.remove("is-m3-exp");
@@ -5300,20 +5790,24 @@
       document.getElementById("m3-exp-layer").hidden = true;
       document.getElementById("m3-proof-layer").hidden = false;
       document.getElementById("m3-reward").hidden = true;
-      art.src = "assets/screens/m3/m3_buktikan.png";
-      art.alt = "Misi 3 Buktikan. Pilih pengiraan yang membuktikan paras akhir 1000 mL.";
+      var pending = assignArt(art, "assets/screens/m3/m3_buktikan.png", "Misi 3 Buktikan. Pilih pengiraan yang membuktikan paras akhir 1000 mL.");
       enterScreen("m3-buktikan");
+      return pending;
     }
     function showComplete() {
+      var feedback = document.getElementById("m3-feedback");
       frame.classList.remove("is-m3-exp");
       frame.classList.remove("is-m3-proof");
       document.getElementById("m3-exp-layer").hidden = true;
       document.getElementById("m3-proof-layer").hidden = true;
-      document.getElementById("m3-feedback").hidden = true;
       document.getElementById("m3-dialog").hidden = true;
-      document.getElementById("m3-reward").hidden = false;
+      if (feedback && !m1OutcomeOpen) {
+        feedback.hidden = true;
+      }
+      var pending = revealReward("m3-reward");
       renderMap();
       enterScreen("m3-selesai");
+      return pending;
     }
     openM3Stage = function () {
       if (!m3.fikirSolved) {
@@ -5344,7 +5838,7 @@
           recordM3(true, "Fikir: betul, 600 mL");
           showStageOutcome("m3", "betul", queue(function () {
             volume = 600;
-            showExperiment();
+            return showExperiment();
           }));
           return;
         }
@@ -5459,7 +5953,7 @@
         if (token !== box.wait.m4 || missionFourScreen.hidden) {
           return;
         }
-        action();
+        return action();
       };
     }
     function resetPipes() {
@@ -5474,9 +5968,9 @@
       document.getElementById("m4-exp-layer").hidden = true;
       document.getElementById("m4-proof-layer").hidden = true;
       document.getElementById("m4-reward").hidden = true;
-      art.src = "assets/screens/m4/m4_fikir.png";
-      art.alt = "Misi 4 Fikir. Pilih dua paip yang jumlahnya 750 mL.";
+      var pending = assignArt(art, "assets/screens/m4/m4_fikir.png", "Misi 4 Fikir. Pilih dua paip yang jumlahnya 750 mL.");
       enterScreen("m4-fikir");
+      return pending;
     }
     function showExperiment() {
       frame.classList.add("is-m4-exp");
@@ -5484,10 +5978,10 @@
       document.getElementById("m4-exp-layer").hidden = false;
       document.getElementById("m4-proof-layer").hidden = true;
       document.getElementById("m4-reward").hidden = true;
-      art.src = "assets/screens/m4/m4_eksperimen.png";
-      art.alt = "Misi 4 Eksperimen. Sambungkan paip sehingga 750 mL.";
+      var pending = assignArt(art, "assets/screens/m4/m4_eksperimen.png", "Misi 4 Eksperimen. Sambungkan paip sehingga 750 mL.");
       box.placeFill("m4", volume, false);
       enterScreen("m4-eksperimen");
+      return pending;
     }
     function showProof() {
       frame.classList.remove("is-m4-exp");
@@ -5495,21 +5989,25 @@
       document.getElementById("m4-exp-layer").hidden = true;
       document.getElementById("m4-proof-layer").hidden = false;
       document.getElementById("m4-reward").hidden = true;
-      art.src = "assets/screens/m4/m4_buktikan.png";
-      art.alt = "Misi 4 Buktikan. Tangki perlu 750 mL dan sudah ada 250 mL.";
+      var pending = assignArt(art, "assets/screens/m4/m4_buktikan.png", "Misi 4 Buktikan. Tangki perlu 750 mL dan sudah ada 250 mL.");
       enterScreen("m4-buktikan");
+      return pending;
     }
     function showComplete() {
+      var feedback = document.getElementById("m4-feedback");
       frame.classList.remove("is-m4-exp");
       frame.classList.remove("is-m4-proof");
       document.getElementById("m4-exp-layer").hidden = true;
       document.getElementById("m4-proof-layer").hidden = true;
-      document.getElementById("m4-feedback").hidden = true;
       document.getElementById("m4-dialog").hidden = true;
-      document.getElementById("m4-reward").hidden = false;
+      if (feedback && !m1OutcomeOpen) {
+        feedback.hidden = true;
+      }
+      var pending = revealReward("m4-reward");
       renderMap();
       enterScreen("m4-selesai");
       scheduleKoleksi();
+      return pending;
     }
     openM4Stage = function () {
       if (!m4.fikirSolved) {
@@ -5543,7 +6041,7 @@
           recordM4(true, "Fikir: betul, 250 + 500");
           showStageOutcome("m4", "betul", queue(function () {
             resetPipes();
-            showExperiment();
+            return showExperiment();
           }));
           return;
         }
@@ -5588,7 +6086,7 @@
             recordM4(false, "Eksperimen: salah, " + used.join(" + "));
             showStageOutcome("m4", "cuba", queue(function () {
               resetPipes();
-              showExperiment();
+              return showExperiment();
             }));
           }
         }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 900);

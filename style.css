@@ -1441,6 +1441,8 @@ body.is-pouring .beaker.selected .beaker-body {
 
 .welcome-frame {
   position: relative;
+  width: min(100vw, 56.25vh);
+  height: min(100vh, 177.7778vw);
   width: min(100vw, calc(100dvh * 1080 / 1920));
   height: min(100dvh, calc(100vw * 1920 / 1080));
   overflow: hidden;
@@ -2018,6 +2020,8 @@ body.is-pouring .beaker.selected .beaker-body {
 .map-frame,
 .mission-frame {
   position: relative;
+  width: min(100vw, 56.25vh);
+  height: min(100vh, 177.7778vw);
   width: min(100vw, calc(100dvh * 1080 / 1920));
   height: min(100dvh, calc(100vw * 1920 / 1080));
   overflow: hidden;
@@ -2046,6 +2050,10 @@ body.is-pouring .beaker.selected .beaker-body {
   object-fit: fill;
   pointer-events: none;
   user-select: none;
+}
+
+.m1-feedback .feedback-hotspot {
+  z-index: 2;
 }
 
 .m1-reward {
